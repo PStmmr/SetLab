@@ -2,9 +2,28 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
-    "opener:default"
+    "opener:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://api.deezer.com/*"
+        },
+        {
+          "url": "https://api.reccobeats.com/*"
+        },
+        {
+          "url": "https://open.spotify.com/*"
+        },
+        {
+          "url": "https://soundcloud.com/*"
+        }
+      ]
+    }
   ]
 }

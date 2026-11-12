@@ -2,42 +2,69 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <title>SetLab</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
-
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
-
-      <div class="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/src/assets/vite.svg" class="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img
-            src="/src/assets/tauri.svg"
-            class="logo tauri"
-            alt="Tauri logo"
-          />
-        </a>
-        <a href="https://www.typescriptlang.org/docs" target="_blank">
-          <img
-            src="/src/assets/typescript.svg"
-            class="logo typescript"
-            alt="typescript logo"
-          />
-        </a>
-      </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
-
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
+    <header class="topbar">
+      <div class="brand">Set<span>Lab</span></div>
+      <form id="start-form" class="start-form">
+        <input id="start-input" type="text" autocomplete="off" placeholder="Spotify or SoundCloud link, or artist and title" />
+        <button type="submit">Start</button>
       </form>
-      <p id="greet-msg"></p>
+    </header>
+
+    <main class="layout">
+      <aside class="set-panel">
+        <div class="panel-head">
+          <h2>Your set</h2>
+          <div class="panel-actions">
+            <button id="export-set" class="ghost" type="button">Copy</button>
+            <button id="clear-set" class="ghost" type="button">Clear</button>
+          </div>
+        </div>
+        <ol id="set-list" class="set-list"></ol>
+        <p id="set-empty" class="hint">Paste a link above to start your set.</p>
+      </aside>
+
+      <section class="suggest-panel">
+        <div class="filters">
+          <label><input id="f-harmonic" type="checkbox" /> Harmonic only</label>
+          <label><input id="f-samekey" type="checkbox" /> Same key only</label>
+          <label><input id="f-genre" type="checkbox" /> Same genre family</label>
+          <label>Tempo
+            <select id="f-direction">
+              <option value="any">hold</option>
+              <option value="up">raise</option>
+              <option value="down">lower</option>
+            </select>
+          </label>
+          <label>Tolerance
+            <select id="f-tolerance">
+              <option value="4">±4 %</option>
+              <option value="8" selected>±8 %</option>
+              <option value="12">±12 %</option>
+            </select>
+          </label>
+          <label class="slider">Mainstream
+            <input id="f-underground" type="range" min="0" max="1" step="0.1" value="0" />
+            Underground
+          </label>
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+
+        <p id="status" class="status"></p>
+        <div id="choices" class="choices"></div>
+        <div id="suggestions" class="suggestions"></div>
+      </section>
     </main>
+
+    <footer class="footer">
+      Data from Deezer and ReccoBeats. SetLab is not affiliated with Deezer, Spotify or SoundCloud.
+      Previews for private use only.
+    </footer>
+    <audio id="player"></audio>
   </body>
 </html>
