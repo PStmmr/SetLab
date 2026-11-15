@@ -26,6 +26,7 @@ export interface RankOptions {
   direction: Direction;
   underground: number;
   limit: number;
+  avoid?: string[];
 }
 
 export const DEFAULT_OPTIONS: RankOptions = {
@@ -54,7 +55,7 @@ export interface Suggestion {
 const NEUTRAL = 0.5;
 
 function hasKey(t: Track): t is Track & Required<Pick<Track, "key" | "mode">> {
-  return t.key !== undefined && t.mode !== undefined;
+  return typeof t.key === "number" && (t.mode === "major" || t.mode === "minor");
 }
 
 function formatPct(p: number): string {
@@ -119,6 +120,12 @@ export function scorePair(
   return { track: to, score: Math.max(0, Math.min(1, score)), parts, reasons };
 }
 
+/** v0.2.0 - Identifies a song independent of the data source, so the same song from Deezer and ReccoBeats counts once. */
+export function trackKey(t: Track): string {
+  const norm = (s: string) => s.toLowerCase().replace(/[([](?:feat|ft)\.?[^)\]]*[)\]]|\b(?:feat|ft)\.?\s.*$/gi, "").replace(/[^\p{L}\p{N}]+/gu, "");
+  return `${norm(t.artist)}|${norm(t.title)}`;
+}
+
 export function rankCandidates(
   current: Track,
   candidates: Track[],
@@ -126,18 +133,24 @@ export function rankCandidates(
   options: RankOptions = DEFAULT_OPTIONS,
 ): Suggestion[] {
   const usedIds = new Set([current.id, ...set.map((t) => t.id)]);
+  const usedKeys = new Set([current, ...set].map(trackKey));
+  const avoid = new Set(options.avoid ?? []);
   const recentArtists = new Set(
     [...set.slice(-2), current].map((t) => t.artist.toLowerCase()),
   );
   const seen = new Set<string>();
   const results: Suggestion[] = [];
   for (const candidate of candidates) {
-    if (usedIds.has(candidate.id) || seen.has(candidate.id)) continue;
-    seen.add(candidate.id);
+    const key = trackKey(candidate);
+    if (usedIds.has(candidate.id) || usedKeys.has(key) || seen.has(key)) continue;
+    seen.add(key);
     const suggestion = scorePair(current, candidate, options);
     if (!suggestion) continue;
     if (recentArtists.has(candidate.artist.toLowerCase())) suggestion.score *= 0.7;
     results.push(suggestion);
   }
-  return results.sort((a, b) => b.score - a.score).slice(0, options.limit);
+  results.sort((a, b) => b.score - a.score);
+  const fresh = results.filter((s) => !avoid.has(trackKey(s.track)));
+  const repeated = results.filter((s) => avoid.has(trackKey(s.track)));
+  return [...fresh, ...repeated].slice(0, options.limit);
 }

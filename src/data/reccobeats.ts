@@ -51,15 +51,24 @@ export function reccoToTrack(t: RbTrack): Track {
 }
 
 export function applyFeatures(track: Track, f: RbFeatures): Track {
+  // fmi - ReccoBeats sends null or -1 when it does not know the key. Only accept real pitch classes 0 to 11.
+  const hasKey = typeof f.key === "number" && Number.isInteger(f.key) && f.key >= 0 && f.key <= 11;
   return {
     ...track,
     reccoId: track.reccoId ?? f.id,
     isrc: track.isrc ?? f.isrc,
-    bpm: f.tempo && f.tempo > 0 ? f.tempo : track.bpm,
-    key: f.key !== undefined && f.key >= 0 && f.key <= 11 ? f.key : track.key,
-    mode: f.key !== undefined && f.key >= 0 && f.mode !== undefined ? (f.mode === 1 ? "major" : "minor") : track.mode,
-    energy: f.energy ?? track.energy,
+    bpm: typeof f.tempo === "number" && f.tempo > 0 ? f.tempo : track.bpm,
+    key: hasKey ? (f.key as number) : track.key,
+    mode: hasKey && typeof f.mode === "number" ? (f.mode === 1 ? "major" : "minor") : track.mode,
+    energy: typeof f.energy === "number" ? f.energy : track.energy,
   };
+}
+
+/** fmi - ReccoBeats answers with a page object; tolerate a plain list too. */
+function contentOf<T>(page: unknown): T[] {
+  if (Array.isArray(page)) return page as T[];
+  const content = (page as RbPage<T> | null)?.content;
+  return Array.isArray(content) ? content : [];
 }
 
 function chunks<T>(items: T[], size: number): T[][] {
@@ -84,6 +93,21 @@ export class ReccoBeatsClient {
 
   tracks(spotifyIds: string[]): Promise<RbTrack[]> {
     return this.batched<RbTrack>("/v1/track", spotifyIds);
+  }
+
+  async searchArtist(name: string): Promise<RbArtist[]> {
+    const page = await this.get(`${this.base}/v1/artist/search?searchText=${encodeURIComponent(name)}`);
+    return contentOf<RbArtist>(page);
+  }
+
+  async searchTrack(text: string): Promise<RbTrack[]> {
+    const result = await this.get(`${this.base}/v1/track/search?searchText=${encodeURIComponent(text)}&size=50`);
+    return contentOf<RbTrack>(result).filter((t) => t?.id && t.trackTitle && Array.isArray(t.artists));
+  }
+
+  async artistTracks(artistId: string, page = 0): Promise<RbTrack[]> {
+    const result = await this.get(`${this.base}/v1/artist/${artistId}/track?size=50&page=${page}`);
+    return contentOf<RbTrack>(result).filter((t) => t?.id && t.trackTitle && Array.isArray(t.artists));
   }
 
   features(ids: string[]): Promise<RbFeatures[]> {

@@ -22,6 +22,7 @@ export function searchText(...parts: (string | undefined)[]): string {
     .filter((p): p is string => Boolean(p))
     .join(" ")
     .replace(/\((?:feat|ft)\.?[^)]*\)/gi, " ")
+    .replace(/\b(?:feat|ft)\.?\s[^()[\]]*/gi, " ")
     .replace(/[()[\]]/g, " ")
     .replace(/\s+-\s+/g, " ")
     .replace(/\s+/g, " ")
@@ -47,6 +48,12 @@ export function stripNoise(title: string): string {
     .replace(/\s*[|/]\s*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** v0.2.0 - Splits label uploads like "BCee - Back To The Street" into artist and title. */
+export function splitArtistTitle(title: string): { artist: string; title: string } | null {
+  const match = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  return match ? { artist: match[1].trim(), title: match[2].trim() } : null;
 }
 
 export function originalTitle(title: string): string {

@@ -2,7 +2,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { fetch } from "@tauri-apps/plugin-http";
 import { formatCamelot, fromCamelot, parseCamelot, toCamelot } from "./core/camelot";
-import { DEFAULT_OPTIONS, type RankOptions, type Suggestion } from "./core/score";
+import { DEFAULT_OPTIONS, trackKey, type RankOptions, type Suggestion } from "./core/score";
 import type { Direction, Track } from "./core/types";
 import { createHttpGet } from "./data/http";
 import { soundcloudUrl, spotifyUrl } from "./data/links";
@@ -39,12 +39,18 @@ const els = {
 };
 
 let set: Track[] = loadSet();
-let busy = false;
+/** Increases with every refresh. Older runs that finish late are ignored. */
+let run = 0;
+/** v0.2.0 - Suggestions from the step before the last added track, so the next step avoids repeating them. */
+let avoid: string[] = [];
+let shown: string[] = [];
 
 function loadSet(): Track[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Track[]) : [];
+    const tracks = raw ? (JSON.parse(raw) as Track[]) : [];
+    // Older versions could save null as key. Treat that as unknown.
+    return tracks.map((t) => (typeof t.key === "number" ? t : { ...t, key: undefined, mode: undefined }));
   } catch {
     return [];
   }
@@ -59,7 +65,7 @@ function saveSet(): void {
 }
 
 function keyLabel(t: Track): string {
-  return t.key !== undefined && t.mode !== undefined ? formatCamelot(toCamelot(t.key, t.mode)) : "–";
+  return typeof t.key === "number" && t.mode ? formatCamelot(toCamelot(t.key, t.mode)) : "–";
 }
 
 function bpmLabel(t: Track): string {
@@ -86,10 +92,7 @@ function cover(t: Track): HTMLElement {
 function linkButtons(t: Track): HTMLElement {
   const box = el("div", "links");
   if (t.preview) {
-    const play = el("button", "ghost", "▶ Preview");
-    play.type = "button";
-    play.addEventListener("click", () => togglePreview(t.preview!, play));
-    box.append(play);
+    box.append(previewButton(t.preview, "▶ Preview", "❚❚ Stop", "ghost"));
   }
   const spotify = el("button", "ghost", "Spotify");
   spotify.type = "button";
@@ -103,24 +106,36 @@ function linkButtons(t: Track): HTMLElement {
 
 let playingButton: HTMLButtonElement | null = null;
 
+/** v0.2.0 */
+function previewButton(url: string, idle: string, active: string, className: string): HTMLButtonElement {
+  const button = el("button", className, idle);
+  button.type = "button";
+  button.dataset.idle = idle;
+  button.dataset.active = active;
+  button.title = "Preview";
+  button.addEventListener("click", () => togglePreview(url, button));
+  return button;
+}
+
+function resetPlaying(): void {
+  if (playingButton) playingButton.textContent = playingButton.dataset.idle ?? "";
+  playingButton = null;
+}
+
 function togglePreview(url: string, button: HTMLButtonElement): void {
   if (playingButton === button && !els.player.paused) {
     els.player.pause();
-    button.textContent = "▶ Preview";
-    playingButton = null;
+    resetPlaying();
     return;
   }
-  if (playingButton) playingButton.textContent = "▶ Preview";
+  resetPlaying();
   els.player.src = url;
   void els.player.play();
-  button.textContent = "❚❚ Stop";
+  button.textContent = button.dataset.active ?? "";
   playingButton = button;
 }
 
-els.player.addEventListener("ended", () => {
-  if (playingButton) playingButton.textContent = "▶ Preview";
-  playingButton = null;
-});
+els.player.addEventListener("ended", resetPlaying);
 
 type Field = "key" | "bpm";
 
@@ -152,13 +167,13 @@ function applyManual(index: number, field: Field, text: string): boolean {
 function editableTag(index: number, field: Field): HTMLElement {
   const track = set[index];
   const label = field === "key" ? keyLabel(track) : bpmLabel(track);
-  const missing = field === "key" ? track.key === undefined : !track.bpm;
+  const missing = field === "key" ? keyLabel(track) === "–" : !track.bpm;
   const tag = el("button", missing ? "tag edit muted" : "tag edit", label);
   tag.type = "button";
   tag.title = field === "key" ? "Enter key (Camelot, e.g. 8A)" : "Enter BPM";
   tag.addEventListener("click", () => {
     const input = el("input", "tag-input");
-    input.placeholder = field === "key" ? "8A" : "174";
+    input.placeholder = field === "key" ? "Key" : "BPM";
     input.value = missing ? "" : field === "key" ? keyLabel(track) : String(Math.round(track.bpm ?? 0));
     let done = false;
     const finish = (save: boolean, keepOpenIfInvalid = true) => {
@@ -200,12 +215,18 @@ function renderSet(): void {
       remove.title = "Remove";
       remove.addEventListener("click", () => {
         set = set.slice(0, i);
+        avoid = [];
         saveSet();
         renderSet();
         if (set.length > 0) void refresh();
-        else els.suggestions.replaceChildren();
+        else {
+          run++;
+          setLoading(false);
+          els.suggestions.replaceChildren();
+        }
       });
-      item.append(cover(t), meta, tags, remove);
+      const play = t.preview ? previewButton(t.preview, "▶", "❚❚", "icon play") : el("span", "icon play");
+      item.append(cover(t), meta, tags, play, remove);
       return item;
     }),
   );
@@ -223,10 +244,12 @@ function options(): RankOptions {
     },
     direction: els.direction.value as Direction,
     underground: Number(els.underground.value),
+    avoid,
   };
 }
 
 function renderSuggestions(list: Suggestion[]): void {
+  shown = list.map((s) => trackKey(s.track));
   els.suggestions.replaceChildren(
     ...list.map((s) => {
       const card = el("article", "card");
@@ -241,6 +264,7 @@ function renderSuggestions(list: Suggestion[]): void {
       take.type = "button";
       take.addEventListener("click", () => {
         set = [...set, s.track];
+        avoid = shown;
         saveSet();
         renderSet();
         void refresh();
@@ -252,18 +276,41 @@ function renderSuggestions(list: Suggestion[]): void {
   );
 }
 
+/** Shows a spinner next to the status line and blocks the Refresh button while a search runs. */
+function setLoading(on: boolean): void {
+  els.status.classList.toggle("busy", on);
+  els.suggestions.classList.toggle("loading", on);
+  els.refresh.disabled = on;
+  els.refresh.textContent = on ? "Loading …" : "Search";
+  if (on) els.refresh.classList.remove("pending");
+}
+
+/** A filter changed: stop the running search and wait for the user to press Search. */
+function filtersChanged(): void {
+  if (set.length === 0) return;
+  run++;
+  setLoading(false);
+  els.refresh.classList.add("pending");
+  setStatus("Filters changed. Press Search to update the suggestions.");
+}
+
 function setStatus(text: string): void {
   els.status.textContent = text;
 }
 
 async function refresh(): Promise<void> {
   const current = set[set.length - 1];
-  if (!current || busy) return;
-  busy = true;
-  els.suggestions.classList.add("loading");
+  if (!current) return;
+  const id = ++run;
+  const index = set.length - 1;
+  const stale = () => id !== run;
+  setLoading(true);
   try {
-    const result = await suggestNext(engine, current, set.slice(0, -1), options(), undefined, setStatus);
-    set[set.length - 1] = result.start;
+    const result = await suggestNext(engine, current, set.slice(0, -1), options(), undefined, (step) => {
+      if (!stale()) setStatus(step);
+    });
+    if (stale()) return;
+    set[index] = result.start;
     saveSet();
     renderSet();
     renderSuggestions(result.suggestions);
@@ -272,19 +319,19 @@ async function refresh(): Promise<void> {
         ? `${result.suggestions.length} suggestions from ${result.candidates} candidates`
         : result.candidates === 0
           ? "The data sources know no similar artists for this track. Try another start track or type artist and title instead."
-          : "No matching tracks found. Loosen the filters or raise the tolerance.",
+          : `No matching tracks found. ${result.withKey} of ${result.candidates} candidates have a known key. Loosen the filters or raise the tolerance.`,
     );
   } catch (error) {
-    setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    if (!stale()) setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
-    busy = false;
-    els.suggestions.classList.remove("loading");
+    if (!stale()) setLoading(false);
   }
 }
 
 function startWith(track: Track): void {
   els.choices.replaceChildren();
   set = [track];
+  avoid = [];
   saveSet();
   renderSet();
   void refresh();
@@ -296,8 +343,10 @@ els.form.addEventListener("submit", async (event) => {
   if (!value) return;
   setStatus("Searching track …");
   els.choices.replaceChildren();
+  els.status.classList.add("busy");
   try {
     const matches = await resolveStart(engine, value);
+    els.status.classList.remove("busy");
     if (matches.length === 0) {
       setStatus("Nothing found. Try artist and title as text.");
       return;
@@ -319,17 +368,21 @@ els.form.addEventListener("submit", async (event) => {
       }),
     );
   } catch (error) {
+    els.status.classList.remove("busy");
     setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 });
 
 els.refresh.addEventListener("click", () => void refresh());
 [els.harmonic, els.sameKey, els.genre, els.direction, els.tolerance, els.underground].forEach((input) =>
-  input.addEventListener("change", () => void refresh()),
+  input.addEventListener("change", filtersChanged),
 );
 
 els.clearSet.addEventListener("click", () => {
   set = [];
+  avoid = [];
+  run++;
+  setLoading(false);
   saveSet();
   renderSet();
   els.suggestions.replaceChildren();

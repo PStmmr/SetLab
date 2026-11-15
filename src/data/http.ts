@@ -1,4 +1,4 @@
-/** HTTP helper. Throttles requests per host so no API blocks us, and caches responses. */
+/** HTTP helper. Throttles requests per host so no API blocks us, and caches responses. v0.2.0 - Returns parsed JSON, or plain text for web pages. */
 export type HttpGet = (url: string) => Promise<unknown>;
 
 export class HttpError extends Error {
@@ -10,7 +10,7 @@ export class HttpError extends Error {
   }
 }
 
-export type FetchLike = (url: string) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+export type FetchLike = (url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
 export interface HttpOptions {
   minIntervalMs?: Record<string, number>;
@@ -38,7 +38,12 @@ export function createHttpGet(fetchFn: FetchLike, options: HttpOptions = {}): Ht
     const request = wait(host).then(async () => {
       const response = await fetchFn(url);
       if (!response.ok) throw new HttpError(response.status, url);
-      return response.json();
+      const body = await response.text();
+      try {
+        return JSON.parse(body) as unknown;
+      } catch {
+        return body;
+      }
     });
     request.catch(() => cache.delete(url));
     cache.set(url, request);

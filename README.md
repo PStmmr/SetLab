@@ -6,9 +6,12 @@ A desktop app that helps you build DJ sets. Paste a Spotify or SoundCloud link (
 
 * Start from a Spotify link, a SoundCloud link or plain text
 * Ten ranked suggestions per step, each with a short reason like 8A → 9A or 174 → 172 BPM
+* Fresh suggestions on every step, tracks you already saw move to the back
 * Filters for harmonic mixing, same key, genre family, tempo direction and tolerance
+* Deep search that digs further through related artists when strict key filters leave too few matches
 * Mainstream to underground slider
-* 30 second previews and quick links to Spotify and SoundCloud
+* Reads the genre tag and credited artist from SoundCloud pages, works with label uploads and bootlegs
+* 30 second previews for suggestions and set tracks, plus quick links to Spotify and SoundCloud
 * Enter missing BPM or key by hand
 * Copy the finished set to the clipboard
 
