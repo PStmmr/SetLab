@@ -2,6 +2,9 @@
 
 A desktop app that helps you build DJ sets. Paste a Spotify or SoundCloud link (or type artist and title) and SetLab suggests fitting next tracks based on key (Camelot), tempo, genre and energy. No AI, no API key needed.
 
+<img width="2562" height="1708" alt="image" src="https://github.com/user-attachments/assets/032f2cc2-dc0d-4e71-8699-d9c71d52f0d3" />
+
+
 ## Features
 
 * Start from a Spotify link, a SoundCloud link or plain text
