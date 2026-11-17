@@ -5,9 +5,11 @@ A desktop app that helps you build DJ sets. Paste a Spotify or SoundCloud link (
 ## Features
 
 * Start from a Spotify link, a SoundCloud link or plain text
+* Add any track to your set by link, not only suggested ones
 * Ten ranked suggestions per step, each with a short reason like 8A → 9A or 174 → 172 BPM
 * Fresh suggestions on every step, tracks you already saw move to the back
 * Filters for harmonic mixing, same key, genre family, tempo direction and tolerance
+* Mood filter that lifts or calms the intensity of the next track
 * Deep search that digs further through related artists when strict key filters leave too few matches
 * Mainstream to underground slider
 * Reads the genre tag and credited artist from SoundCloud pages, works with label uploads and bootlegs
@@ -36,11 +38,13 @@ Requires Node.js, Rust and the Tauri prerequisites for your system.
 
 ## How it works
 
-* `src/data` fetches info from Deezer, ReccoBeats, Spotify and SoundCloud
+* `src/data` fetches info from Deezer, ReccoBeats, Spotify, SoundCloud
 * `src/engine` collects candidates from related artists and recommendations
 * `src/core` scores every candidate on key, tempo, genre and energy
 * `src/main.ts` is the UI
 
 ## Disclaimer
 
-For private use only. SetLab is not affiliated with Deezer, Spotify, SoundCloud or ReccoBeats and does not download any audio.
+For private use only. SetLab is not affiliated with Deezer, Spotify, SoundCloud, ReccoBeats or GetSongBPM and does not download any audio.
+
+Key and BPM backup data by [GetSongBPM.com](https://getsongbpm.com).
